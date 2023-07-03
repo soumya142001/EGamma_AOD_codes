@@ -1,2 +1,9 @@
 *~
 .__*
+*crab_*
+*.txt
+*.root*
+*.pyc
+*.pkl
+*.log
+*.tgz
