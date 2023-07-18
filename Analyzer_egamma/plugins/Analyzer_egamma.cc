@@ -227,7 +227,18 @@ struct Lepton
   size_t size;
   double energy;
   double correctedEnergy;
+  
+  //ecalrechit collection
 
+  int ieta;
+  int iphi;
+
+  //Photon variables
+
+  int seedieta;
+  int seediphi;
+  bool hasConversionTracks;
+  bool isEB,isEE,isES;
 
 
   //Random variables
@@ -255,8 +266,26 @@ std::vector<Lepton> sc;
 std::vector<Lepton> CaloCluster;
 std::vector<Lepton> CaloCluster_EB;
 std::vector<Lepton> CaloCluster_EE;
+std::vector<Lepton> ecalrechit_EB;
+std::vector<Lepton> Photon;
+std::vector<Lepton> Two_Gsfelec;
+std::vector<Lepton> One_Gsfelec;
 std::vector<identity> convtype;
 std::vector<int> nevent_goodIso;
+std::vector<int> nevent_convertphotons;
+std::vector<int> nevent_photons;
+std::vector<int> nevent_unconvertphotons;
+
+//Text File Declaratiom
+std::fstream file_convert_photons("Converted_Photons.txt",ios::app);
+std::fstream file_unconvert_photons("Unconverted_Photons.txt",ios::app);
+std::fstream file_twogsf_EB("Two_Gsf_rechit_EB.txt",ios::app);
+std::fstream file_onegsf_EB("One_Gsf_rechit_EB.txt",ios::app);
+std::fstream file_delta_seedietaiphi_twogsf_EB_eta_05("TwoGsf_delta_seedietaiphi_EB_eta_05.txt",ios::app);
+std::fstream file_delta_seedietaiphi_twogsf_EB_eta_05_1("TwoGsf_delta_seedietaiphi_EB_05_1.txt",ios::app);
+std::fstream file_delta_seedietaiphi_twogsf_EB_eta_1_2("TwoGsf_delta_seedietaiphi_EB_1_2.txt",ios::app);
+std::fstream file_delta_seedietaiphi_twogsf_EB_eta_2_("TwoGsf_delta_seedietaiphi_EB_2_.txt",ios::app);
+
 using reco::TrackCollection;
 
 class Analyzer_egamma : public edm::one::EDAnalyzer<edm::one::SharedResources> {
@@ -306,6 +335,10 @@ private:
   TH1D *calo_histo[50];
   TGraph2D *gr_good,*gr_bad,*gr_gsf,*gr_good_ecal,*gr_bad_ecal;
   TH3D *mustache_histo[10];
+  
+  
+  
+  
 #ifdef THIS_IS_AN_EVENTSETUP_EXAMPLE
   edm::ESGetToken<SetupData, SetupRecord> setupToken_;
 #endif
@@ -416,6 +449,8 @@ Analyzer_egamma::Analyzer_egamma(const edm::ParameterSet& iConfig) :
   gsf_e_histo[66] = fs->make<TH1D>("Size of goodIsoGsf","size_goodIsoGsf",10,0,10);
   gsf_e_histo[67] = fs->make<TH1D>("nevent goodIso","nevent_goodIso",10000,0,10000);
   gsf_e_histo[68] = fs->make<TH1D>("goodIso_eta","goodIso_eta",200,-10,10);
+  gsf_e_histo[69] = fs->make<TH1D>("ecal_rechit_gsf","ecal_rechit_gsf",2560,0,256);
+  gsf_e_histo[70] = fs->make<TH1D>("di-electron invariant mass","di_electron_invm",1000,0,100);
   //Conversions Histogram
   conversion_histo[0] = fs->make<TH1D>("Conersion nTracks","nTracks",10,0,10);
   conversion_histo[1] = fs->make<TH1D>("isConverted","isConverted",5,0,5);
@@ -538,6 +573,10 @@ Analyzer_egamma::Analyzer_egamma(const edm::ParameterSet& iConfig) :
   photon_histo[1] = fs->make<TH1D>("Photon seed Phi","Photon_seed_Phi",100,-5,5);
   photon_histo[2] = fs->make<TH1D>("Converted r9","converted_r9",100,0,1);
   photon_histo[3] = fs->make<TH1D>("unconverted r9","unconverted_r9",100,0,1);
+  photon_histo[4] = fs->make<TH1D>("nevent converted photons","nevent_converted_photons",10000,0,10000);
+  photon_histo[5] = fs->make<TH1D>("nevent photons","nevent_photons",10000,0,10000);
+  photon_histo[6] = fs->make<TH1D>("nevent unconverted photons","nevent_unconverted_photons",10000,0,10000);
+
 
   //TGraph2D 
     
@@ -559,6 +598,9 @@ Analyzer_egamma::Analyzer_egamma(const edm::ParameterSet& iConfig) :
 
   mustache_histo[0] = fs->make<TH3D>("goodGsf Energy vs eta-phi","energy_eta_phi",500,-5,5,500,-5,5,100,0,100);    
   mustache_histo[1] = fs->make<TH3D>("badGsf Energy vs eta-phi","energy_eta_phi",500,-5,5,500,-5,5,100,0,100);
+  
+
+
 
 
 #ifdef THIS_IS_AN_EVENTSETUP_EXAMPLE
@@ -603,6 +645,13 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
   CaloCluster_EB.clear();
   CaloCluster_EE.clear();
   nevent_goodIso.clear();
+  ecalrechit_EB.clear();
+  Photon.clear();
+  nevent_convertphotons.clear();
+  nevent_photons.clear();
+  nevent_unconvertphotons.clear();
+  Two_Gsfelec.clear();
+  One_Gsfelec.clear();
   //Define the handler,a token and get the information by token
   //Handle<vector<pat::Electron> > myelec;
   //iEvent.getByToken(etoken_,myelec);
@@ -635,10 +684,6 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
 
 
   
-  fstream file("ECAL_rechit.txt",ios::app);
-  fstream file1("Photon_evt50_rechit.txt",ios::app);
-  fstream file2("unconverted_photon_evt53_rechit.txt",ios::app);
-
 
   nevent++;
   //Define Temporary Variables
@@ -648,40 +693,10 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
 
   // Lepton temp;
   int n_isgsf,n_gsf;
- 
+  
   n_gsf=0;
   n_isgsf=0;
-
-  //if collection is valid loop over electron events
-  /* if(myelec.isValid())
-     {
-     for(const pat::Electron &ie : *myelec)
-     {
-     temp.v_e.SetPxPyPzE(ie.px(),ie.py(),ie.pz(),ie.energy());
-     temp.eta = temp.v_e.Eta();      
-     temp.phi = temp.v_e.Phi();
-     temp.pT = temp.v_e.Pt();
-     if(ie.isElectron())
-     {
-     n_e++;
-     }
-
-     elec.push_back(temp);
-
-     eg_histo[0]->Fill(temp.v_e.E());     
-     eg_histo[1]->Fill(temp.v_e.Pz());
-     eg_histo[2]->Fill(temp.eta);
-     eg_histo[3]->Fill(temp.phi);
-     eg_histo[5]->Fill(temp.pT);
-     }
-     temp.n_electrons = n_e;
-     elec.push_back(temp);
-     eg_histo[4]->Fill(n_e);
-
-     //for (const auto& track : iEvent.get(tracksToken_)) {
-     // do something with track parameters, e.g, plot the charge.
-     // int charge = track.charge();
-     }*/
+  
   for(const reco::GsfElectron &ie : *mygsf_elec_ged)
     {
       Lepton temp;
@@ -717,11 +732,20 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
       temp.convFlags = ie.convFlags();
       temp.r9 = ie.r9();
       temp.ecalEnergy = ie.ecalEnergy();
+      temp.isEB = ie.isEB();
+      temp.isEE = ie.isEE();
+ 
+      DetId id = (ie.superCluster())->seed()->seed();
+      EBDetId a(id);
+
+      temp.seedieta = a.ieta();
+      temp.seediphi = a.iphi();
+
       if(abs(ie.eta()<0.8)) temp.fbrem_eta_8 = ie.fbrem();
       if(abs(ie.eta())>0.8 && abs(ie.eta())<1.44) temp.fbrem_eta_144 = ie.fbrem();
       if(abs(ie.eta())>1.57 && abs(ie.eta())<2) temp.fbrem_eta_2 = ie.fbrem();
       if(abs(ie.eta())>2) temp.fbrem_eta_2_ = ie.fbrem();
-	  
+        
       gsf_elec.push_back(temp);
 
       if(ie.isElectron())
@@ -767,8 +791,6 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
       gsf_e_histo[42]->Fill(temp.ecalPFClusterIso/temp.v.Pt());
       gsf_e_histo[43]->Fill(temp.r9);
     }
-  //temp.n_gsf_e = n_is_gsf_e;
-  // gsf_elec.push_back(gsf_temp);
   gsf_e_histo[1]->Fill(n_isgsf);
   gsf_e_histo[2]->Fill(n_gsf);
 
@@ -785,6 +807,10 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
     gsf_e_histo[40]->Fill(gsf_elec.at(1).v.Pt());
   }
 
+  if((int)gsf_elec.size()>1){
+    float Mee = (gsf_elec.at(0).v+gsf_elec.at(1).v).M();
+    gsf_e_histo[70]->Fill(Mee);
+  }
 
   for(const reco::GsfElectron &ie : *mygsf_elec_unonly)
     {
@@ -792,7 +818,6 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
       temp.scPixCharge = ie.scPixCharge();
       temp.id = ie.pdgId();
       temp.v.SetPtEtaPhiM(ie.pt(),ie.eta(),ie.phi(),0.000511);
-      //gsf_elec.push_back(temp);
 
 
       if(ie.isElectron())
@@ -803,16 +828,10 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
 
       gsf_e_histo[4]->Fill(temp.scPixCharge);
       gsf_e_histo[7]->Fill(ie.pdgId());
-    }
-  //temp.n_gsf_e = n_is_gsf_e;                                                                                                                                                                          
-  // gsf_elec.push_back(gsf_temp);                                                                                                                                                                      
+    }                                                                                                                                                                      
   gsf_e_histo[5]->Fill(n_isgsf);
   gsf_e_histo[6]->Fill(n_gsf);
-
-
-  //for (const auto& track : iEvent.get(tracksToken_)) {                                                                                                                                                
-  // do something with track parameters, e.g, plot the charge.                                                                                                                                          
-  // int charge = track.charge();                                                                                                                                                                       
+                                                                                                                                                                       
   for(const reco::Conversion &ie : *myconversion)
     {
       Lepton temp;
@@ -831,26 +850,6 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
       //std::cout<<"Phi: "<<ie.phi()<<"eta: "<<ie.eta()<<std::endl; 
       temp.v.SetPtEtaPhiM(ie.refittedPair4Momentum().Pt(),ie.refittedPair4Momentum().Eta(),ie.refittedPair4Momentum().Phi(),ie.refittedPair4Momentum().M());
       conversion.push_back(temp);
-      //bool good_convert = false;
-      //bool good_gsf = false;
-      /*for(unsigned int i=0; i<gsf_elec.size();i++){
-	if(gsf_elec.at(i).v.DeltaR(temp.v) < 0.1){
-	good_convert = true;
-	break;
-	}
-	}
-
-	for(unsigned int i=0; i<gsf_elec.size();i++){
-	if(gsf_elec.at(i).v.DeltaR(temp.v) >= 0.4){
-	good_gsf = true;
-	temp_gsf = gsf_elec.at(i);
-	break;
-	}
-	}*/
-
-
-      //if(good_convert) goodConversion.push_back(temp);
-      //if(good_gsf) goodGsf_elec.push_back(temp_gsf);
 
       conversion_histo[0]->Fill(temp.nTracks);
       conversion_histo[1]->Fill(temp.isConverted);
@@ -898,12 +897,6 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
   }
           
    
-  // conversion_histo[12]->Fill(dRmin0);
-
-
-  // bool good_convert = false;
-  //bool good_gsf = false;
-  //Lepton temp;
   int ind_gsf;
   int ind_conv;
   float dRmin;
@@ -928,18 +921,10 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
     if(dRmin > 0.4 && gsf_elec.size()>0 && conversion.size()>0) goodGsf_elec.push_back(gsf_elec.at(ind_gsf));
   }
 
-  /* if(dRmin < 0.1 && gsf_elec.size()>0 && conversion.size()>0) {
-
-     badGsf_elec.push_back(gsf_elec.at(ind_gsf));
-     goodConversion.push_back(conversion.at(ind_conv));
-     }
-  
-     if(dRmin > 0.4 && gsf_elec.size()>0 && conversion.size()>0) goodGsf_elec.push_back(gsf_elec.at(ind_gsf));
-  */   
   
   sort(0);
         
-  //Conversion
+  /********************************************************************************************Conversion*********************************************************************************/
 
   for(unsigned int i=0;i<goodConversion.size();i++){
 
@@ -948,7 +933,7 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
      
   if(goodConversion.size()>0)  conversion_histo[14]->Fill(goodConversion.at(0).v.Pt());
 
-  //goodGsf 
+  /***********************************************************************************************goodGsf***********************************************************************************/ 
   for(unsigned int i=0;i<goodGsf_elec.size();i++){
 
     gsf_e_histo[44]->Fill(goodGsf_elec.at(i).v.Pt());
@@ -956,7 +941,7 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
     
   if(goodGsf_elec.size()>0) gsf_e_histo[45]->Fill(goodGsf_elec.at(0).v.Pt());
 
-  //badGsf
+  /***********************************************************************************************badGsf**************************************************************************************/
   for(unsigned int i=0;i<badGsf_elec.size();i++){
 
     gsf_e_histo[46]->Fill(badGsf_elec.at(i).v.Pt());
@@ -969,7 +954,7 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
   gsf_e_histo[49]->Fill(badGsf_elec.size());
   conversion_histo[16]->Fill(goodConversion.size());
   
-  //Showr shape variables for good and bad gsf
+  /*************************************************************************Shower shape variables for good and badgsf ****************************************************************************/
 
   for(unsigned int i=0;i<goodGsf_elec.size();i++){ 
     gsf_e_histo[51]->Fill(goodGsf_elec.at(i).r9);
@@ -997,8 +982,8 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
         
       DeDx_histo[0]->Fill(temp.charge);
       DeDx_histo[1]->Fill(temp.pathlength);                                                                                                             
-	                                                                                                                                 
-	                                                                                                                                       
+                                                                                                                                       
+                                                                                                                                             
     }
 
 
@@ -1157,6 +1142,16 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
 
   sort(0);
 
+
+  /****************************************************************************************************************************************************************************************************
+
+                                                                                GoodGsf and Track matching. Identifying T1 and T2
+										
+
+  ******************************************************************************************************************************************************************************************************/
+
+
+
   for(unsigned int i=0;i<goodGsf_elec.size();i++){
     float dRmin = 9999;
     //int ind;                                                                                                                                                                                   
@@ -1305,9 +1300,7 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
       CaloCluster.push_back(temp);
       gsf_e_histo[65]->Fill(temp.eta,temp.energy/10);
      
-      //conversion_histo[40]->Fill(temp.phi);
-      //conversion_histo[41]->Fill(temp.eta);
-
+ 
     }
 
   for(const reco::CaloCluster &ie : *myCalo_eb)
@@ -1319,10 +1312,7 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
       //temp.size = ie.size();                                                                                                          
 
       CaloCluster_EB.push_back(temp);
-      calo_histo[0]->Fill(temp.eta);
-
-      //conversion_histo[40]->Fill(temp.phi);                                                                                           
-      //conversion_histo[41]->Fill(temp.eta);                                                                                           
+      calo_histo[0]->Fill(temp.eta);                                                                                           
 
     }
 
@@ -1334,101 +1324,207 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
       temp.phi = ie.phi();
       //temp.size = ie.size();              
       CaloCluster_EB.push_back(temp);
-      calo_histo[1]->Fill(temp.eta);
-
-      //conversion_histo[40]->Fill(temp.phi);       
-      //conversion_histo[41]->Fill(temp.eta);                                                                      
-                                                    
-
+      calo_histo[1]->Fill(temp.eta);                                                                      
+ 
     }
 
-  int nrec = 0;
-  if(nevent == 50){
-    for(const EcalRecHit &ie : *myrechit)
-      {
-	
-	EBDetId a(ie.id());
-	file<<ie.energy()<<" "<<a.ieta()<<" "<<a.iphi()<<endl;
-	
-	if(fabs(a.ieta()-85)<=20 && fabs(a.iphi()-299)<=20){
-	  file1<<ie.energy()<<" "<<(a.ieta()-85)<<" "<<(a.iphi()-299)<<endl;
-	}
-      }
-  }
-  
-  file.close();
-  file1.close();
-  
-  
-  if(nevent == 53){
-    for(const EcalRecHit &ie : *myrechit)
-      {
 
-	EBDetId a(ie.id());
+  /******************************************************************************************************************************************************************************************************
 
-	
-        if(fabs(a.ieta()-60)<=20 && fabs(a.iphi()-186)<=20){
-          file2<<ie.energy()<<" "<<(a.ieta()-60)<<" "<<(a.iphi()-186)<<endl;
-        }
-      }
-  }
+                                                                   ECAL Rechit and matching it With Photon and Gsf Electron Collection
+										   
+  ******************************************************************************************************************************************************************************************************/
+
+
+
+  //Converted and Unconverted loop starts
   
-  file2.close();
-  
-  
+  for(const EcalRecHit &ie : *myrechit)
+    {
+      Lepton temp;
+      EBDetId a(ie.id());
+      temp.ieta = a.ieta();
+      temp.iphi = a.iphi();
+      temp.energy = ie.energy();
+      ecalrechit_EB.push_back(temp);
+      
+    }
+
+
   for(const reco::Photon &ie : *myphoton)
     {
-
+      Lepton temp;
+      temp.hasConversionTracks = ie.hasConversionTracks();
+      temp.isEB = ie.isEB();
+      temp.isEE = ie.isEE();
+      temp.r9 = ie.r9();
+      
+      DetId id = (ie.superCluster())->seed()->seed();
+      EBDetId a(id);
+      temp.seedieta = a.ieta();
+      temp.seediphi = a.iphi();
+      
+      Photon.push_back(temp);
       
       photon_histo[0]->Fill(ie.caloPosition().Eta());
       photon_histo[1]->Fill(ie.caloPosition().Phi());
-      
-      if(ie.isEB() && ie.hasConversionTracks()){
-	photon_histo[2]->Fill(ie.r9());
-	DetId id = (ie.superCluster())->seed()->seed();
-	EBDetId a(id);
-	cout<<"Has COnversion Tracks: "<<a.ieta()<<" "<<a.iphi()<<" "<<nevent<<endl;
-      }
-      
-      else if(ie.isEB() && !(ie.hasConversionTracks())){
-	photon_histo[3]->Fill(ie.r9());
-	DetId id = (ie.superCluster())->seed()->seed();
-        EBDetId a(id);
-	cout<<"Has No COnversion Tracks: "<<a.ieta()<<" "<<a.iphi()<<" "<<nevent<<endl;
-      }
     }
+
+  
+  for(unsigned int i=0;i<Photon.size();i++){
+    if(Photon.at(i).isEB && Photon.at(i).hasConversionTracks){
+      nevent_convertphotons.push_back(nevent);
+      photon_histo[4]->Fill(nevent);
+      photon_histo[2]->Fill(Photon.at(i).r9); 
+    }
+  }
+  
+  for(unsigned int i=0;i<Photon.size();i++){
+    if(Photon.at(i).isEB && !(Photon.at(i).hasConversionTracks)){
+      nevent_unconvertphotons.push_back(nevent);
+      photon_histo[6]->Fill(nevent);
+      photon_histo[3]->Fill(Photon.at(i).r9);
+    }
+  }
+  
+  for(unsigned int i=0;i<Photon.size();i++){
+    if(Photon.at(i).isEB){
+      nevent_photons.push_back(nevent);
+      photon_histo[5]->Fill(nevent);
+    }
+  }
+
+  for(unsigned int i=0;i<Photon.size();i++){
+    int seedieta = Photon.at(i).seedieta;
+    int seediphi = Photon.at(i).seediphi;
+    for(unsigned int j=0;j<ecalrechit_EB.size();j++){
+      int ieta = ecalrechit_EB.at(j).ieta;
+      int iphi = ecalrechit_EB.at(j).iphi;
+      int dieta = ieta-seedieta;
+      int diphi = iphi-seediphi;
+      float energy = ecalrechit_EB.at(j).energy;
+      bool isConversion = fabs(diphi)<=20 && fabs(dieta)<=20 && Photon.at(i).isEB && Photon.at(i).hasConversionTracks;
+      bool isUnconversion = fabs(diphi)<=20 && fabs(dieta)<=20 && Photon.at(i).isEB && !(Photon.at(i).hasConversionTracks);
+      
+      //File Format : Evt number__Photon pos(i)__Energy__dieta__diphi  
+
+      if(isConversion) file_convert_photons<<nevent<<" "<<i<<" "<<energy<<" "<<dieta<<" "<<diphi<<endl;
+      if(isUnconversion) file_unconvert_photons<<nevent<<" "<<i<<" "<<energy<<" "<<dieta<<" "<<diphi<<endl;
+    }
+  }
+  
+     
+  /****************************************************************************************************************************************************************************************************
+ 
+                                                                    ECAL rechit of 2 GSF electron and 1 GSF electron event and dR(e1,e2)<1
+
+  ****************************************************************************************************************************************************************************************************/  
+  
+  sort(1); //Sorting based on Energy in ecal
+
+  if(gsf_elec.size()==2){
+    float dR_e0e1 = gsf_elec.at(0).v.DeltaR(gsf_elec.at(1).v);
+    bool is_two_electron = (dR_e0e1<1);
+    bool is_one_electron = (dR_e0e1>1);
+    if(is_two_electron){
+      Two_Gsfelec.push_back(gsf_elec.at(0));
+      Two_Gsfelec.push_back(gsf_elec.at(1));
+    }
+    if(is_one_electron) One_Gsfelec.push_back(gsf_elec.at(0));
+  }
+  
+  if(gsf_elec.size()==1) One_Gsfelec.push_back(gsf_elec.at(0));
+
+  if(Two_Gsfelec.size()>0){
+    for(unsigned int i=0;i<ecalrechit_EB.size();i++){
+      int seedieta = Two_Gsfelec.at(0).seedieta;
+      int seediphi = Two_Gsfelec.at(0).seediphi;
+      int ieta = ecalrechit_EB.at(i).ieta;
+      int iphi = ecalrechit_EB.at(i).iphi;
+      int dieta = ieta-seedieta;
+      int diphi = iphi-seediphi;
+      float energy = ecalrechit_EB.at(i).energy;
+      
+      if(fabs(dieta)<=20 && fabs(diphi)<=20 && Two_Gsfelec.at(0).isEB) file_twogsf_EB<<nevent<<" "<<energy<<" "<<dieta<<" "<<diphi<<endl;
+  }
+  }
+  
+  if(One_Gsfelec.size()>0){
+    
+    for(unsigned int i=0;i<ecalrechit_EB.size();i++){
+      int seedieta = One_Gsfelec.at(0).seedieta;
+      int seediphi = One_Gsfelec.at(0).seediphi;
+      int ieta = ecalrechit_EB.at(i).ieta;
+      int iphi = ecalrechit_EB.at(i).iphi;
+      int dieta = ieta-seedieta;
+      int diphi = iphi-seediphi;
+      float energy = ecalrechit_EB.at(i).energy;
+      
+      if(fabs(dieta)<=20 && fabs(diphi)<=20 && One_Gsfelec.at(0).isEB) file_onegsf_EB<<nevent<<" "<<energy<<" "<<dieta<<" "<<diphi<<endl;
+    }
+  }
+
+  /**************************************************************************** Rechits for all gsf electrons *************************************************************************************/
+
+  for(unsigned int i=0;i<gsf_elec.size();i++){
+    for(unsigned int j=0;j<ecalrechit_EB.size();j++){ 
+      if(gsf_elec.at(i).isEB) gsf_e_histo[69]->Fill(ecalrechit_EB.at(j).energy);
+    }
+  }
+ 
+  
+  /***************************************************************************** delta(seedieta),delta(seediphi),dR *******************************************************************************/
   
   
+  if(Two_Gsfelec.size()>0){
+    float dR = Two_Gsfelec.at(0).v.DeltaR(Two_Gsfelec.at(1).v);
+    int ieta0 = Two_Gsfelec.at(0).seedieta;
+    int ieta1 = Two_Gsfelec.at(1).seedieta;
+    int iphi0 = Two_Gsfelec.at(0).seediphi;
+    int iphi1 = Two_Gsfelec.at(1).seediphi;
+    int dieta = fabs(ieta0-ieta1);
+    int diphi = fabs(iphi0-iphi1);
+    
+    if(Two_Gsfelec.at(0).v.Eta()<0.5) file_delta_seedietaiphi_twogsf_EB_eta_05<<nevent<<" "<<dieta<<" "<<diphi<<" "<<dR<<endl;
+    if(Two_Gsfelec.at(0).v.Eta()>0.5 && Two_Gsfelec.at(0).v.Eta()<1) file_delta_seedietaiphi_twogsf_EB_eta_05_1<<nevent<<" "<<dieta<<" "<<diphi<<" "<<dR<<endl;
+    if(Two_Gsfelec.at(0).v.Eta()>1 && Two_Gsfelec.at(0).v.Eta()<2) file_delta_seedietaiphi_twogsf_EB_eta_1_2<<nevent<<" "<<dieta<<" "<<diphi<<" "<<dR<<endl;
+    if(Two_Gsfelec.at(0).v.Eta()>2) file_delta_seedietaiphi_twogsf_EB_eta_2_<<nevent<<" "<<dieta<<" "<<diphi<<" "<<dR<<endl;
+  }
+ 
   
-  
+  /*************************************************************************************************************************************************************************************************  
+
+                                                                     GSF Electron, Track  and CaloCluster variables Calculation and matching with CaloClusters
+								    
+  ***************************************************************************************************************************************************************************************************/
   
   for(unsigned int i=0;i<gsf_elec.size();i++){
     float dRmin = 9999;
     int ind;
     for(unsigned int j=0;j<CaloCluster.size();j++){
       float temp = deltaR(gsf_elec.at(i).v.Eta(),gsf_elec.at(i).v.Phi(),CaloCluster.at(j).eta,CaloCluster.at(j).phi);
-      if(temp < dRmin){
-	dRmin = temp;
-	ind = j;
-      }
+    if(temp < dRmin){
+      dRmin = temp;
+      ind = j;
+    }
     }
     if(dRmin<0.4){
       double eta_calo = CaloCluster.at(ind).eta;
       double eta_gsf = gsf_elec.at(i).v.Eta();
       double phi_calo = CaloCluster.at(ind).phi;
       double phi_gsf = gsf_elec.at(i).v.Phi();
-	    
-	    
+      
+      
       gr_gsf->SetPoint(gr_gsf->GetN(),eta_calo-eta_gsf,delta_phi_sign(phi_calo,phi_gsf),CaloCluster.at(ind).energy);
-	 
+      
       // mustache_histo[0]->Fill(CaloCluster.at(ind).eta-goodGsf_elec.at(i).v.Eta(),delta_phi(CaloCluster.at(ind).phi,goodGsf_elec.at(
       // ).v.Phi(),CaloCluster.at(ind).energy);                                     
-	 
+      
     }
   }
-
-	
-	
+ 
+  
+  
   for(unsigned int i=0;i<goodIsoGsf_elec.size();i++){
     float dRmin = 9999;
     int ind;
@@ -1444,17 +1540,17 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
       double eta_gsf = goodIsoGsf_elec.at(i).v.Eta();
       double phi_calo = CaloCluster.at(ind).phi;
       double phi_gsf = goodIsoGsf_elec.at(i).v.Phi();
-    
-         
+      
+      
       gr_good->SetPoint(gr_good->GetN(),eta_calo-eta_gsf,delta_phi_sign(phi_calo,phi_gsf),CaloCluster.at(ind).energy);
       if(goodIsoGsf_elec.at(i).v.Pt()<10)  merged_histo[4]->Fill(eta_calo-eta_gsf,delta_phi_sign(phi_calo,phi_gsf));
       if(goodIsoGsf_elec.at(i).v.Pt()>10 && goodIsoGsf_elec.at(i).v.Pt()<20)  merged_histo[5]->Fill(eta_calo-eta_gsf,delta_phi_sign(phi_calo,phi_gsf));
       if(goodIsoGsf_elec.at(i).v.Pt()>20 && goodIsoGsf_elec.at(i).v.Pt()<50)  merged_histo[6]->Fill(eta_calo-eta_gsf,delta_phi_sign(phi_calo,phi_gsf));
       if(goodIsoGsf_elec.at(i).v.Pt()>100)  merged_histo[7]->Fill(eta_calo-eta_gsf,delta_phi_sign(phi_calo,phi_gsf));
-
-
+      
+      
       // mustache_histo[0]->Fill(CaloCluster.at(ind).eta-goodGsf_elec.at(i).v.Eta(),delta_phi(CaloCluster.at(ind).phi,goodGsf_elec.at(i).v.Phi(),CaloCluster.at(ind).energy);
-
+      
     }
   }
   
@@ -1469,12 +1565,12 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
       }
     }
     if(dRmin<0.1){
-         
+      
       double eta_calo = CaloCluster.at(ind).eta;
       double eta_gsf = badGsf_elec.at(i).v.Eta();
       double phi_calo = CaloCluster.at(ind).phi;
       double phi_gsf = badGsf_elec.at(i).v.Phi();
-
+      
 
       gr_bad->SetPoint(gr_bad->GetN(),eta_calo-eta_gsf,delta_phi_sign(phi_calo,phi_gsf),CaloCluster.at(ind).energy);
       if(badGsf_elec.at(i).v.Pt()<10)  merged_histo[8]->Fill(eta_calo-eta_gsf,delta_phi_sign(phi_calo,phi_gsf));
@@ -1484,7 +1580,7 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
 
 
       // mustache_histo[1]->Fill(CaloCluster.at(ind).eta-badGsf_elec.at(i).v.Eta(),CaloCluster.at(ind).phi-badGsf_elec.at(i).v.Phi \
-      //			 (),CaloCluster.at(ind).energy);
+      // (),CaloCluster.at(ind).energy);
     }
   }
     
@@ -1505,7 +1601,7 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
 	  double eta_gsf = goodIsoGsf_elec.at(i).v.Eta();
 	  double phi_calo = CaloCluster.at(j).phi;
 	  double phi_gsf = goodIsoGsf_elec.at(i).v.Phi();
-	  
+	    
 	  merged_histo[12]->Fill(eta_calo-eta_gsf,delta_phi_sign(phi_calo,phi_gsf));
 	}
       }
@@ -1553,7 +1649,7 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
        
     calo_histo[5]->Fill(sum/E_elec);
   }
-	 
+   
  
 
   for(unsigned int i=0;i<goodIsoGsf_elec.size();i++){
@@ -1656,13 +1752,21 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
 void Analyzer_egamma::beginJob() {
   // please remove this method if not needed
   nevent = 0;
-
+  
 }
 
 // ------------ method called once each job just after ending the event loop  ------------
 void Analyzer_egamma::endJob() {
   // please remove this method if not needed
   std::cout<<"Total Events:"<<nevent<<std::endl;
+  file_convert_photons.close();
+  file_unconvert_photons.close();
+  file_twogsf_EB.close();
+  file_onegsf_EB.close();
+  file_delta_seedietaiphi_twogsf_EB_eta_05.close();
+  file_delta_seedietaiphi_twogsf_EB_eta_05_1.close();
+  file_delta_seedietaiphi_twogsf_EB_eta_1_2.close();
+  file_delta_seedietaiphi_twogsf_EB_eta_2_.close();
 
 }
 
@@ -1710,7 +1814,7 @@ void Analyzer_egamma::sort(int opt)
 	if(goodIsoGsf_elec[i].v.Pt()<goodIsoGsf_elec[j].v.Pt()) swap(goodIsoGsf_elec.at(i),goodIsoGsf_elec.at(j));
       }
     }
-
+    
     for(int i=0;i<(int)badGsf_elec.size()-1;i++){
       for(int j=i+1;j<(int)badGsf_elec.size();j++){
 	if(badGsf_elec[i].v.Pt()<badGsf_elec[j].v.Pt()) swap(badGsf_elec.at(i),badGsf_elec.at(j));
@@ -1748,9 +1852,19 @@ void Analyzer_egamma::sort(int opt)
 	if(conv_track[i].v.Pt()<conv_track[j].v.Pt()) swap(conv_track.at(i),conv_track.at(j));
       }
     }
-
-
+    
+    
   }
+  
+  if(opt==1){
+    for(int i=0;i<(int)gsf_elec.size()-1;i++){
+      for(int j=i+1;j<(int)gsf_elec.size();j++){
+        if(gsf_elec[i].v.E()<gsf_elec[j].v.E()) swap(gsf_elec.at(i),gsf_elec.at(j));
+      }
+    }
+  }
+  
+  
 }
 
 float Analyzer_egamma::delta_phi(float phi1, float phi2)
