@@ -85,6 +85,7 @@
 #include "TH1.h"
 #include "TH2.h"
 #include "TGraph2D.h"
+#include "TGraph.h"
 
 //Vector Headers
 #include<vector>
@@ -95,6 +96,10 @@
 #include "DataFormats/EcalRecHit/interface/EcalRecHitCollections.h"
 #include "DataFormats/EcalRecHit/interface/EcalRecHit.h"
 #include "DataFormats/EcalDetId/interface/EBDetId.h"
+
+// Genparticle header File
+
+#include "DataFormats/HepMCCandidate/interface/GenParticle.h"
 
 // class declaration
 //
@@ -115,8 +120,10 @@ struct Lepton
 { 
   //Generic Variables
   TLorentzVector v;
+  float dR;
   TVector3 v1;
   int id; int ind; int momid;
+  int dauid;
   float wt;
 
   //GSF Electron.h variables 
@@ -270,6 +277,14 @@ std::vector<Lepton> ecalrechit_EB;
 std::vector<Lepton> Photon;
 std::vector<Lepton> Two_Gsfelec;
 std::vector<Lepton> One_Gsfelec;
+std::vector<Lepton> genElec;
+std::vector<Lepton> genElec_momJPsi;
+std::vector<Lepton> genElec_mom0_isJPsi;
+std::vector<Lepton> genElec_momn_isJPsi;
+std::vector<Lepton> genJPsi;
+std::vector<Lepton> genJPsi_dau_iselec;
+std::vector<Lepton> recoJPsi;
+std::vector<Lepton> genJPsi_to_ee;
 std::vector<identity> convtype;
 std::vector<int> nevent_goodIso;
 std::vector<int> nevent_convertphotons;
@@ -285,6 +300,7 @@ std::fstream file_delta_seedietaiphi_twogsf_EB_eta_05("TwoGsf_delta_seedietaiphi
 std::fstream file_delta_seedietaiphi_twogsf_EB_eta_05_1("TwoGsf_delta_seedietaiphi_EB_05_1.txt",ios::app);
 std::fstream file_delta_seedietaiphi_twogsf_EB_eta_1_2("TwoGsf_delta_seedietaiphi_EB_1_2.txt",ios::app);
 std::fstream file_delta_seedietaiphi_twogsf_EB_eta_2_("TwoGsf_delta_seedietaiphi_EB_2_.txt",ios::app);
+std::fstream file_eff("Efficiency_vs_dR",ios::app);
 
 using reco::TrackCollection;
 
@@ -307,6 +323,10 @@ private:
   // ----------member data ---------------------------
   
   int nevent;
+  int num1,num2,num3,num4,num5,num6,num7,num8,num9,num10,num11;
+  int den;
+  int ngen1,ngen2,ngen3,ngen4,ngen5,ngen6,ngen7,ngen8,ngen9,ngen10,ngen11;
+  int ngsf1,ngsf2,ngsf3,ngsf4,ngsf5,ngsf6,ngsf7,ngsf8,ngsf9,ngsf10,ngsf11;
   edm::EDGetTokenT<TrackCollection> tracksToken_;  //used to select what tracks to read from configuration file
   TH1D *demohisto;
   //------------e-gamma members-----------------------
@@ -331,9 +351,13 @@ private:
   edm::EDGetTokenT<vector<reco::CaloCluster> > calo_ee_token_;
   edm::EDGetTokenT<edm::SortedCollection<EcalRecHit,edm::StrictWeakOrdering<EcalRecHit>> > ecalrechit_;
   edm::EDGetTokenT<vector<reco::Photon> > photon_token_;
+  edm::EDGetTokenT<vector<reco::GenParticle> > gen_token_;
+  TH1D *gen_histo[50];
   TH1D *photon_histo[50];
   TH1D *calo_histo[50];
+  TH2D *JPsi_histo[50];
   TGraph2D *gr_good,*gr_bad,*gr_gsf,*gr_good_ecal,*gr_bad_ecal;
+  TGraph *gr_JPsi;
   TH3D *mustache_histo[10];
   
   
@@ -370,7 +394,8 @@ Analyzer_egamma::Analyzer_egamma(const edm::ParameterSet& iConfig) :
   calo_eb_token_(consumes<vector<reco::CaloCluster> >(iConfig.getParameter<edm::InputTag>("calo_eb_token"))),
   calo_ee_token_(consumes<vector<reco::CaloCluster> >(iConfig.getParameter<edm::InputTag>("calo_ee_token"))),
   ecalrechit_(consumes<edm::SortedCollection<EcalRecHit,edm::StrictWeakOrdering<EcalRecHit> > >(iConfig.getParameter<edm::InputTag>("ecalrechit"))),
-  photon_token_(consumes<vector<reco::Photon> >(iConfig.getParameter<edm::InputTag>("photon_token")))
+  photon_token_(consumes<vector<reco::Photon> >(iConfig.getParameter<edm::InputTag>("photon_token"))),
+  gen_token_(consumes<vector<reco::GenParticle> >(iConfig.getParameter<edm::InputTag>("gen_token")))
 {
   edm::Service<TFileService> fs;
   eg_histo[0] = fs->make<TH1D>("Electron_energy","Electron_energy",100, 0, 1000);
@@ -421,7 +446,7 @@ Analyzer_egamma::Analyzer_egamma(const edm::ParameterSet& iConfig) :
   gsf_e_histo[38] = fs->make<TH1D>("fbrem_eta2_ ged gsf","fbrem",600,-3,3);
   gsf_e_histo[39] = fs->make<TH1D>("Leading Pt0 of gedGsf electron","pt0_gsf",1000,0,1000);
   gsf_e_histo[40] = fs->make<TH1D>("sub-Leading Pt1 of gedGsf electron","pt1_gsf",1000,0,1000); 
-  gsf_e_histo[41]= fs->make<TH1D>("flag for conversion-rejection ged gsf","flag",200,-100,100);
+  gsf_e_histo[41] = fs->make<TH1D>("flag for conversion-rejection ged gsf","flag",200,-100,100);
   gsf_e_histo[42] = fs->make<TH1D>("ecalPFClusterIso/pT ged gsf","ecalPFClusterIso/pT",500,0,5);
   gsf_e_histo[43] = fs->make<TH1D>("r9 ged gsf","r9",1000,0,100);
   gsf_e_histo[44] = fs->make<TH1D>("Pt of Good ged_gsf","Pt good_ ged Gsf",10,0,10);
@@ -451,6 +476,13 @@ Analyzer_egamma::Analyzer_egamma(const edm::ParameterSet& iConfig) :
   gsf_e_histo[68] = fs->make<TH1D>("goodIso_eta","goodIso_eta",200,-10,10);
   gsf_e_histo[69] = fs->make<TH1D>("ecal_rechit_gsf","ecal_rechit_gsf",2560,0,256);
   gsf_e_histo[70] = fs->make<TH1D>("di-electron invariant mass","di_electron_invm",1000,0,100);
+  gsf_e_histo[71] = fs->make<TH1D>("dR_JPsi","dR_JPsi",1000,0,1);
+  gsf_e_histo[72] = fs->make<TH1D>("pT_of_JPsi","pT_JPsi",200,0,200);
+  gsf_e_histo[73] = fs->make<TH1D>("JPsi_M_dR005","JPsi_M_dR005",200,2,4);
+  gsf_e_histo[74] = fs->make<TH1D>("JPsi_M_dR005to01","JPsi_M_dR005to01",200,2,4);
+  gsf_e_histo[75] = fs->make<TH1D>("JPsi_M_dR01to015","JPsi_M_dR01to015",200,2,4);
+  gsf_e_histo[76] = fs->make<TH1D>("JPsi_M_dR015to02","JPsi_M_dR015to02",200,2,4);
+  gsf_e_histo[77] = fs->make<TH1D>("JPsi_M_dR02toinf","JPsi_M_dR02toinf",200,2,4);
   //Conversions Histogram
   conversion_histo[0] = fs->make<TH1D>("Conersion nTracks","nTracks",10,0,10);
   conversion_histo[1] = fs->make<TH1D>("isConverted","isConverted",5,0,5);
@@ -577,7 +609,45 @@ Analyzer_egamma::Analyzer_egamma(const edm::ParameterSet& iConfig) :
   photon_histo[5] = fs->make<TH1D>("nevent photons","nevent_photons",10000,0,10000);
   photon_histo[6] = fs->make<TH1D>("nevent unconverted photons","nevent_unconverted_photons",10000,0,10000);
 
+  // 2D histograms for JPsi analysis
 
+  JPsi_histo[0] = fs->make<TH2D>("dR_vs_pT0ofGsf","dR_vs_pT0ofGsf",200,0,200,1000,0,1); 
+  JPsi_histo[1] = fs->make<TH2D>("dR_vs_pTofJPsi","dR_vs_pT0ofJPsi",200,0,200,1000,0,1);
+  JPsi_histo[2] = fs->make<TH2D>("Gen_dR_vs_pT0","Gen_dR_vs_pT0",200,0,200,1000,0,1);
+  JPsi_histo[3] = fs->make<TH2D>("efficiency vs dR for JPsi reconstruction","efficiency vs dR for JPsi reconstruction",100,0,1,100,0,1);
+
+  // Histograms for Genparticles
+
+  gen_histo[0] = fs->make<TH1D>("Mee_if_mom_JPsi","Mee_if_mom_isJPsi",1000,0,100);
+  gen_histo[1] = fs->make<TH1D>("Mee_genElec","Mee_genElec",1000,0,100);
+  gen_histo[2] = fs->make<TH1D>("size of genElec","Size_genElec",100,0,100);
+  gen_histo[3] = fs->make<TH1D>("size of genElec_ifMom_isJPsi","Size_genElec_momJPsi",100,0,100);
+  gen_histo[4] = fs->make<TH1D>("Number of Mothers","no_of_mothers",100,0,100);
+  gen_histo[5] = fs->make<TH1D>("mom_pdgID","mom_pdgID",600,0,600);
+  gen_histo[6] = fs->make<TH1D>("last_momID","last_momID",1200,-600,600);
+  gen_histo[7] = fs->make<TH1D>("first_momID","first_momID",1200,-600,600);
+  gen_histo[8] = fs->make<TH1D>("Mee_if_mom0_isJPsi","Mee_if_mom0_isJPsi",1000,0,100);
+  gen_histo[9] = fs->make<TH1D>("Mee_if_momn_isJPsi","Mee_if_momn_isJPsi",1000,0,100);
+  gen_histo[10] = fs->make<TH1D>("size of genElec_mom0_isJPsi","size of genElec_mom0_isJPsi",100,0,100);
+  gen_histo[11] = fs->make<TH1D>("size of genElec_momn_isJPsi","size of genElec_momn_isJPsi",100,0,100);
+  gen_histo[12] = fs->make<TH1D>("JPsi mass","JPsi mass",1000,0,100);
+  gen_histo[13] = fs->make<TH1D>("size of genJPsi_dau_iselec","size of genJPsi_dau_iselec",100,0,100);
+  gen_histo[14] = fs->make<TH1D>("pdgId of genJsi daughter","pdgId of genJPsi daughter",1200,-600,600);
+  gen_histo[15] = fs->make<TH1D>("Mee if dau is JPsi","Mee_if_dau_is_JPsi",1000,0,100);
+  gen_histo[16] = fs->make<TH1D>("JPsi mom's Pdg ID","JPsi mom's Pdg ID",1000,0,1000);
+  gen_histo[17] = fs->make<TH1D>("JPsi size","JPsi size",100,0,100);
+  gen_histo[18] = fs->make<TH1D>("dR b/w gen electrons","dR b/w gen electrons",1000,0,10);
+  gen_histo[19] = fs->make<TH1D>("Pt of JPsi","Pt of JPsi",100,0,100);
+  gen_histo[20] = fs->make<TH1D>("dRmin_gsfElec_genElec","dRmin_gsfElec_genElec",1000,0,1);
+  gen_histo[21] = fs->make<TH1D>("genElec_dR-gsf_elec_dR","genElec_dR-gsf_elec_dR",1000,0,1);
+  gen_histo[22] = fs->make<TH1D>("gsf_elec_dR_if_ dR<0.1","gsf_elec_dR_if dR<0.1",1000,0,1);
+  gen_histo[23] = fs->make<TH1D>("Gen_elec_dR_if dR<0.1","Gen_elec_dR_if dR<0.1",1000,0,1);
+  gen_histo[24] = fs->make<TH1D>("efficiency of JPsi reconstruction","efficiency of JPsi reconstruction",10,0,1);
+  gen_histo[25] = fs->make<TH1D>("dR of ee from JPSi","dR of ee from JPsi",100,0,1);
+  gen_histo[26] = fs->make<TH1D>("gen JPsi to ee size","gen JPsi to ee size",10,0,10);
+  gen_histo[27] = fs->make<TH1D>("recoJPsi size","recoJPsi size",10,0,10);
+  gen_histo[28] = fs->make<TH1D>("genElec dR if 2.6<Mee<3.4","genElec dR if 2.6<Mee<3.4",100,0,1);
+  gen_histo[29] = fs->make<TH1D>("recoElec dR if matching genElec ee","recoElec dR if matching genElec ee",100,0,1);
   //TGraph2D 
     
   gr_good = fs->make<TGraph2D>();
@@ -590,7 +660,8 @@ Analyzer_egamma::Analyzer_egamma(const edm::ParameterSet& iConfig) :
   gr_good_ecal->SetTitle("GoodGsf_ECAL;Eta;Phi:Energy");
   gr_bad_ecal = fs->make<TGraph2D>();
   gr_bad_ecal->SetTitle("BadGsf_ECAL;Eta;Phi:Energy");
-
+  gr_JPsi = fs->make<TGraph>();
+  gr_JPsi->SetTitle("Efficiency_vs_dR;dR;eff");
 
 
 
@@ -652,6 +723,14 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
   nevent_unconvertphotons.clear();
   Two_Gsfelec.clear();
   One_Gsfelec.clear();
+  genElec_momJPsi.clear();
+  genElec.clear();
+  genElec_mom0_isJPsi.clear();
+  genElec_momn_isJPsi.clear();
+  genJPsi.clear();
+  genJPsi_dau_iselec.clear();
+  recoJPsi.clear();
+  genJPsi_to_ee.clear();
   //Define the handler,a token and get the information by token
   //Handle<vector<pat::Electron> > myelec;
   //iEvent.getByToken(etoken_,myelec);
@@ -681,7 +760,8 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
   iEvent.getByToken(ecalrechit_,myrechit);
   Handle<vector<reco::Photon> > myphoton;
   iEvent.getByToken(photon_token_,myphoton);
-
+  Handle<vector<reco::GenParticle> > mygenparticle;
+  iEvent.getByToken(gen_token_,mygenparticle);
 
   
 
@@ -954,7 +1034,7 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
   gsf_e_histo[49]->Fill(badGsf_elec.size());
   conversion_histo[16]->Fill(goodConversion.size());
   
-  /*************************************************************************Shower shape variables for good and badgsf ****************************************************************************/
+  /*************************************************************************Shower shape variables for good and bad gsf*****************************************************************************/
 
   for(unsigned int i=0;i<goodGsf_elec.size();i++){ 
     gsf_e_histo[51]->Fill(goodGsf_elec.at(i).r9);
@@ -1464,7 +1544,7 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
     }
   }
 
-  /**************************************************************************** Rechits for all gsf electrons *************************************************************************************/
+  /**************************************************************************** Rechits for all gsf electrons **************************************************************************************/
 
   for(unsigned int i=0;i<gsf_elec.size();i++){
     for(unsigned int j=0;j<ecalrechit_EB.size();j++){ 
@@ -1734,12 +1814,298 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
     conversion_histo[39]->Fill(dRmin);
   }
 
-     
+  /*************************************************************************************************************************************************************************************************
+                                
+                                                                    Analysis of two Gsf electrons from JPsi Starts to see if we have some really close by electrons
+								   
+  **************************************************************************************************************************************************************************************************/
 
+  sort(0);
+
+  if(gsf_elec.size()>1){
+    Lepton temp;
+    float dR = gsf_elec.at(0).v.DeltaR(gsf_elec.at(1).v);
+    float M = (gsf_elec.at(0).v+gsf_elec.at(1).v).M();
+    float pT0 = gsf_elec.at(0).v.Pt();
+    float pT1 = gsf_elec.at(1).v.Pt();
+    float pT = (gsf_elec.at(0).v+gsf_elec.at(1).v).Pt();
+    float eta = (gsf_elec.at(0).v+gsf_elec.at(1).v).Eta();
+    float phi = (gsf_elec.at(0).v+gsf_elec.at(1).v).Phi();
+    temp.v.SetPtEtaPhiM(pT,eta,phi,M);
+    temp.dR = dR;
+    recoJPsi.push_back(temp);
+    bool isOS = (gsf_elec.at(0).id)*(gsf_elec.at(1).id) < 0;
+    bool isJPsi = isOS && M>2.6 && M<3.4;
+    if(isJPsi){
+      gsf_e_histo[71]->Fill(dR);
+      gsf_e_histo[72]->Fill(pT);
+      JPsi_histo[0]->Fill(pT0,dR);
+      JPsi_histo[1]->Fill(pT,dR);
+    }
+    if(isJPsi && dR<0.05) gsf_e_histo[73]->Fill(M);
+    if(isJPsi && dR>0.05 && dR<0.1) gsf_e_histo[74]->Fill(M);
+    if(isJPsi && dR>0.1 && dR<0.15) gsf_e_histo[75]->Fill(M);
+    if(isJPsi && dR>0.15 && dR<0.2) gsf_e_histo[76]->Fill(M);
+    if(isJPsi && dR>0.2) gsf_e_histo[77]->Fill(M);
+  }
+
+
+  /***************************************************************************************************************************************************************************************************
+
+                                                                     Analysis With Generator level info Starts. Checking for electrons with mom JPsi
+								     
+  ****************************************************************************************************************************************************************************************************/
+
+  
+  for(const reco::GenParticle &ie : *mygenparticle)
+    {
+      Lepton temp;
+      temp.v.SetPtEtaPhiM(ie.pt(),ie.eta(),ie.phi(),ie.mass());
+      temp.id = ie.pdgId();
+      int id = ie.pdgId();
+      if(fabs(ie.pdgId()) == 11 && ie.status()==1) genElec.push_back(temp);
+      if(fabs(id) == 443){
+	gen_histo[12]->Fill(ie.mass());
+	genJPsi.push_back(temp);
+      }
+      size_t n = ie.numberOfMothers();
+      size_t ndau = ie.numberOfDaughters();
+      if(n>0){
+	const  reco::Candidate *lastmom = ie.mother(n-1);
+	const  reco::Candidate *firstmom = ie.mother(0);
+	
+	int lastmomid = lastmom->pdgId();
+	int firstmomid = firstmom->pdgId();
+	if(fabs(firstmomid)==443 && fabs(id)==11 && ie.status()==1) genElec_mom0_isJPsi.push_back(temp);
+	if(fabs(lastmomid)==443 && fabs(id)==11 && ie.status()==1) genElec_momn_isJPsi.push_back(temp);
+	gen_histo[6]->Fill(lastmomid);
+	gen_histo[7]->Fill(firstmomid);
+      }
+      /* if(fabs(id)==443){
+      cout<<"****************Parent Particle Info***************"<<endl;
+      cout<<"                                                "<<endl;
+      cout<<"PDG ID: "<<id<<endl;
+      cout<<"Number of Mothers: "<<n<<endl;
+      cout<<"Number of daughters: "<<ndau<<endl;
+      cout<<"Status of particle: "<<ie.status()<<endl;
+      }*/
+      //Checking Daughter of JPsi is electron or not
+      if(ndau==2 && fabs(id)==443){
+	const reco::Candidate *dau0 = ie.daughter(0);
+	const reco::Candidate *dau1 = ie.daughter(1);
+	int dauid0 = dau0->pdgId();
+	int dauid1 = dau1->pdgId();
+	bool isOS = dauid0*dauid1 <0;
+	TLorentzVector v0,v1;
+	v0.SetPtEtaPhiM(dau0->pt(),dau0->eta(),dau0->phi(),dau0->mass());
+	v1.SetPtEtaPhiM(dau1->pt(),dau1->eta(),dau1->phi(),dau1->mass());
+	float dR = v0.DeltaR(v1);
+	temp.dR = dR;
+	if(isOS && fabs(dauid0)==11 && fabs(dauid1)==11 && dau0->status()==1 && dau1->status()==1) genJPsi_to_ee.push_back(temp);
+       }
+      
+      gen_histo[4]->Fill(n);
+ 
+      //Daughter Loop
+      /* if(fabs(id)==443){
+      cout<<"********************** Daughter Information *********************"<<endl;
+      cout<<"                                                                 "<<endl;
+      }*/
+      for(size_t i=0; i<ndau; i++){
+	Lepton temp2;
+	const reco::Candidate *dau = ie.daughter(i);
+	int dauid = dau->pdgId();
+	temp2.id = dauid;
+	temp2.v.SetPtEtaPhiM(dau->pt(),dau->eta(),dau->phi(),dau->mass());
+	if(dau->status()==1) gen_histo[14]->Fill(dauid);
+	if(fabs(id) == 443 && fabs(dauid) == 11 && dau->status() ==1) genJPsi_dau_iselec.push_back(temp2);
+	/*if(fabs(id)==443){
+	cout<<"Daughter "<<i<<endl;
+	cout<<"Daughter PDG ID: "<<dauid<<endl;
+	cout<<"Daughter Satus: "<<dau->status()<<endl;
+	}*/
+      }
+
+      //Mother Loops
+      for(size_t i=0; i<n; i++){
+	const reco::Candidate *mom = ie.mother(i);
+	int momid = fabs(mom->pdgId());
+	temp.momid = momid;
+	if(fabs(id) == 443) gen_histo[16]->Fill(momid);
+	if(momid == 443 && ie.status() == 1 && fabs(ie.pdgId())==11){
+	  genElec_momJPsi.push_back(temp);
+	  break;
+	}
+      }
+      /* if(fabs(id)==443){
+      cout<<"*********************** Mother Information *****************************"<<endl;
+      cout<<"                                                                       "<<endl;
+      }*/
+      for(size_t i=0;i<n; i++){
+	const reco::Candidate *mom = ie.mother(i);
+	int momid = fabs(mom->pdgId());
+	temp.momid = momid;
+	if(fabs(ie.pdgId())==11 && ie.status()==1) gen_histo[5]->Fill(momid);
+	/*if(fabs(id)==443){
+	cout<<"Mother "<<i<<endl;
+	cout<<"Mother PDG ID: "<<mom->pdgId()<<endl;
+	cout<<"Mother Status: "<<mom->status()<<endl;
+	}*/
+      }
+    }
+  
+  sort(0);
+  
+  if(genElec_momJPsi.size()==2 && genJPsi.size()==1){
+    float Mee = (genElec_momJPsi.at(0).v + genElec_momJPsi.at(1).v).M();
+    bool isOS = (genElec_momJPsi.at(0).id)*(genElec_momJPsi.at(1).id) < 0;
+    if(isOS) gen_histo[0]->Fill(Mee);
+  }
+
+  if(genElec.size()>1){
+    float Mee = (genElec.at(0).v+genElec.at(1).v).M();
+    float dR = genElec.at(0).v.DeltaR(genElec.at(1).v);
+    float pT0 = genElec.at(0).v.Pt();
+    bool isOS = (genElec.at(0).id)*(genElec.at(1).id) < 0;
+    gen_histo[18]->Fill(dR);
+    JPsi_histo[2]->Fill(pT0,dR);
+    if(isOS) gen_histo[1]->Fill(Mee);
+  }
+
+  if(genElec_mom0_isJPsi.size()==2 && genJPsi.size()==1){
+    float Mee = (genElec_mom0_isJPsi.at(0).v + genElec_mom0_isJPsi.at(1).v).M();
+    bool isOS = (genElec_mom0_isJPsi.at(0).id)*(genElec_mom0_isJPsi.at(1).id) < 0;
+    if(isOS) gen_histo[8]->Fill(Mee);
+  }
+  
+  
+  if(genElec_momn_isJPsi.size()==2 && genJPsi.size()==1){
+    float Mee = (genElec_momn_isJPsi.at(0).v + genElec_momn_isJPsi.at(1).v).M();
+    bool isOS = (genElec_momn_isJPsi.at(0).id)*(genElec_momn_isJPsi.at(1).id) < 0;
+    if(isOS) gen_histo[9]->Fill(Mee);
+  }
+ 
+  if(genJPsi_dau_iselec.size()==2 && genJPsi.size()==1){
+    //Lepton temp;
+    float Mee = (genJPsi_dau_iselec.at(0).v + genJPsi_dau_iselec.at(1).v).M();
+    bool isOS = (genJPsi_dau_iselec.at(0).id)*(genJPsi_dau_iselec.at(1).id) < 0;
+    float dR = genJPsi_dau_iselec.at(0).v.DeltaR(genJPsi_dau_iselec.at(1).v);
+    //temp.dR = dR;
+    //genJPsi.push_back(temp);
+    if(isOS) gen_histo[15]->Fill(Mee);
+  }
+  if(genJPsi.size()>0) gen_histo[19]->Fill(genJPsi.at(0).v.Pt());
+ 
+  gen_histo[13]->Fill(genJPsi_dau_iselec.size());
+  gen_histo[17]->Fill(genJPsi.size());
+  gen_histo[2]->Fill(genElec.size());
+  gen_histo[3]->Fill(genElec_momJPsi.size());
+  gen_histo[10]->Fill(genElec_mom0_isJPsi.size());
+  gen_histo[11]->Fill(genElec_momn_isJPsi.size());
+  
+
+  /**************************************************************************** RECO::GSF and GenElec matching and plotting **************************************************************************/
+
+  dRmin = 9999;
+  for(unsigned int i=0;i<gsf_elec.size();i++){
+    for(unsigned int j=0;j<genElec.size();j++){
+      float dR = gsf_elec.at(i).v.DeltaR(genElec.at(j).v);
+      if(dR<dRmin) dRmin = dR;
+    }
+    gen_histo[20]->Fill(dRmin);
+    if(genElec.size()>1 && gsf_elec.size()>1){
+      float dRgen = genElec.at(0).v.DeltaR(genElec.at(1).v);
+      float dRgsf = gsf_elec.at(0).v.DeltaR(gsf_elec.at(1).v);
+      if(dRmin<0.1){
+	gen_histo[21]->Fill(fabs(dRgen-dRgsf));
+	gen_histo[22]->Fill(dRgsf);
+	gen_histo[23]->Fill(dRgen);
+      }	
+      else gen_histo[21]->Fill(-1);
+    }  
+  }
+
+  sort(0);
+
+  int n=0;
+  dRmin = 9999;
+
+  /***************************************************************************** Calculating efficiency of JPsi reconstruction vs dR of ee from JPsi to ee******************************************/
+
+  for(unsigned int i=0;i<genJPsi_to_ee.size();i++){
+    for(unsigned int j=0;j<recoJPsi.size();j++){
+      float dR = genJPsi_to_ee.at(i).v.DeltaR(recoJPsi.at(j).v);
+      if(dR<dRmin) dRmin = dR;
+    }
+    if(dRmin<0.1) n++;
+  }
+  
+  if(genJPsi_to_ee.size()>0){
+    float dR = genJPsi_to_ee.at(0).dR;
+    float num = float(n);
+    float den = float(genJPsi_to_ee.size());
+    float eff = num/den;
+    JPsi_histo[3]->Fill(dR,eff);
+    gen_histo[24]->Fill(eff);
+    gen_histo[25]->Fill(dR);
+    file_eff<<dR<<" "<<eff<<endl;
+    gr_JPsi->SetPoint(gr_JPsi->GetN(),dR,eff);
+    //cout<<eff<<endl;
+    //cout<<"Size of recoJPsi"<<recoJPsi.size()<<endl<<"n: "<<n<<"+ "<<n<<endl<<"denominator: "<<den<<endl;
+  }
+
+  gen_histo[26]->Fill(genJPsi_to_ee.size());
+  gen_histo[27]->Fill(recoJPsi.size());
+  
+  /******************************************************************************* Calculating Efficiency Correctly (Earlier was not that correct) *************************************************/
+  
+  if(genElec.size()>1){
+    float Mee = (genElec.at(0).v+genElec.at(1).v).M();
+    float dR = genElec.at(0).v.DeltaR(genElec.at(1).v);
+    bool isOS = (genElec.at(0).id)*(genElec.at(1).id)<0;
+    float dRmin0 = 9999;
+    float dRmin1 = 9999;
+    int ind0,ind1;
+    ind0 = ind1 = 0;
+    if(Mee>2.6 && Mee<3.4 && isOS){
+      den++;
+      gen_histo[28]->Fill(dR);
+    }
+    for(unsigned int i=0;i<gsf_elec.size();i++){
+      float dR0 = genElec.at(0).v.DeltaR(gsf_elec.at(i).v);
+      float dR1 = genElec.at(1).v.DeltaR(gsf_elec.at(i).v);
+      if(dR0 < dRmin0){
+	dRmin0 = dR0;
+	ind0 = i;
+      }
+      if(dR1 < dRmin1){ 
+	dRmin1 = dR1;
+	ind1 = i;
+      } 
+    }
     
+    if(gsf_elec.size()>1 && dRmin0<0.1 && dRmin1 <0.1 && ind0!=ind1){
+      float recoMee = (gsf_elec.at(ind0).v+gsf_elec.at(ind1).v).M();
+      float recodR = gsf_elec.at(ind0).v.DeltaR(gsf_elec.at(ind1).v);
+      bool recoisOS = (gsf_elec.at(ind0).id)*(gsf_elec.at(ind1).id);
+      if(recoMee>2.6 && recoMee<3.4 && recoisOS){
+	gen_histo[29]->Fill(recodR);
+	if(dR<0.1) num1++;
+	if(dR>0.1 && dR<0.2) num2++;
+	if(dR>0.2 && dR<0.3) num3++;
+	if(dR>0.3 && dR<0.4) num4++;
+	if(dR>0.4 && dR<0.5) num5++;
+	if(dR>0.5 && dR<0.6) num6++;
+	if(dR>0.6 && dR<0.7) num7++;
+	if(dR>0.7 && dR<0.8) num8++;
+	if(dR>0.8 && dR<0.9) num9++;
+	if(dR>0.9 && dR<1) num10++;
+	if(dR>1) num11++;
 
-
-
+      }
+    }
+  }
+  
 #ifdef THIS_IS_AN_EVENTSETUP_EXAMPLE
   // if the SetupData is always needed
   auto setup = iSetup.getData(setupToken_);
@@ -1752,6 +2118,10 @@ void Analyzer_egamma::analyze(const edm::Event& iEvent, const edm::EventSetup& i
 void Analyzer_egamma::beginJob() {
   // please remove this method if not needed
   nevent = 0;
+  ngen1=ngen2=ngen3=ngen4=ngen5=ngen6=ngen7=ngen8=ngen9=ngen10=ngen11=0;
+  ngsf1=ngsf2=ngsf3=ngsf4=ngsf5=ngsf6=ngsf7=ngsf8=ngsf9=ngsf10=ngsf11=0;
+  num1=num2=num3=num4=num5=num6=num7=num8=num9=num10=num11=0;
+  den=0;
   
 }
 
@@ -1759,6 +2129,17 @@ void Analyzer_egamma::beginJob() {
 void Analyzer_egamma::endJob() {
   // please remove this method if not needed
   std::cout<<"Total Events:"<<nevent<<std::endl;
+  std::cout<<"Efficiency if dR<0.1 "<<(float)num1/(float)den<<endl;
+  std::cout<<"Efficiency if 0.1<dR<0.2 "<<(float)num2/(float)den<<endl;
+  std::cout<<"Efficiency if 0.2<dR<0.3 "<<(float)num3/(float)den<<endl;
+  std::cout<<"Efficiency if 0.3<dR<0.4 "<<(float)num4/(float)den<<endl;
+  std::cout<<"Efficiency if 0.4<dR<0.5 "<<(float)num5/(float)den<<endl;
+  std::cout<<"Efficiency if 0.5<dR<0.6 "<<(float)num6/(float)den<<endl;
+  std::cout<<"Efficiency if 0.6<dR<0.7 "<<(float)num7/(float)den<<endl;
+  std::cout<<"Efficiency if 0.7<dR<0.8 "<<(float)num8/(float)den<<endl;
+  std::cout<<"Efficiency if 0.8<dR<0.9 "<<(float)num9/(float)den<<endl;
+  std::cout<<"Efficiency if 0.9<dR<1 "<<(float)num10/(float)den<<endl;
+  std::cout<<"Efficiency if dR>1 "<<(float)num11/(float)den<<endl;
   file_convert_photons.close();
   file_unconvert_photons.close();
   file_twogsf_EB.close();
@@ -1767,6 +2148,7 @@ void Analyzer_egamma::endJob() {
   file_delta_seedietaiphi_twogsf_EB_eta_05_1.close();
   file_delta_seedietaiphi_twogsf_EB_eta_1_2.close();
   file_delta_seedietaiphi_twogsf_EB_eta_2_.close();
+  file_eff.close();
 
 }
 
@@ -1852,9 +2234,24 @@ void Analyzer_egamma::sort(int opt)
 	if(conv_track[i].v.Pt()<conv_track[j].v.Pt()) swap(conv_track.at(i),conv_track.at(j));
       }
     }
+    for(int i=0;i<(int)genElec.size()-1;i++){
+      for(int j=i+1;j<(int)genElec.size();j++){
+        if(genElec[i].v.Pt()<genElec[j].v.Pt()) swap(genElec.at(i),genElec.at(j));
+      }
+    }
+
+    for(int i=0;i<(int)genElec_momJPsi.size()-1;i++){
+      for(int j=i+1;j<(int)genElec_momJPsi.size();j++){
+        if(genElec_momJPsi[i].v.Pt()<genElec_momJPsi[j].v.Pt()) swap(genElec_momJPsi.at(i),genElec_momJPsi.at(j));
+      }
+    }
+    for(int i=0;i<(int)genJPsi_to_ee.size()-1;i++){
+      for(int j=i+1;j<(int)genJPsi_to_ee.size();j++){
+	if(genJPsi_to_ee[i].v.Pt()<genJPsi_to_ee[j].v.Pt()) swap(genJPsi_to_ee.at(i),genJPsi_to_ee.at(j));
+      }
+    }
     
-    
-  }
+ }
   
   if(opt==1){
     for(int i=0;i<(int)gsf_elec.size()-1;i++){
